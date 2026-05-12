@@ -11,9 +11,14 @@ __pycache__/
 nextthunk
 nib_dump
 *.gmodel
+tests/CreateAndArchive
+*.d
 
 # Ghidra project temp files
 /tmp/ghidra_projects/
+
+# Program workspace (original binaries + analysis output)
+programs/
 
 # Analysis output
 analysis/
