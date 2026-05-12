@@ -1,0 +1,63 @@
+============================================================
+NIB EXTRACTION COMPLETE
+============================================================
+
+EnvelopeMaker.nib: Reconstructed UI
+  Window: Envelope Editor (320x240)
+  Fields: 9
+  Buttons: 2
+  Menus: 3
+  Custom Views: 1
+  Outlets: 12
+  Actions: 3
+
+Info.nib: About Panel
+  Labels with version/author/copyright info
+  Envelope image
+
+All 31 selectors extracted from nib:
+    alignSelCenter:
+    alignSelLeft:
+    alignSelRight:
+    appDidInit:
+    arrangeInFront:
+    checkSpelling:
+    copy:
+    copyFont:
+    copyRuler:
+    cut:
+    delete:
+    hide:
+    orderFrontColorPanel:
+    paste:
+    pasteFont:
+    pasteRuler:
+    performClick:
+    performClose:
+    performMiniaturize:
+    printEnvelope:
+    runPageLayout:
+    selectAll:
+    setAddrFields:
+    showGuessPanel:
+    showInfoPanel:
+    subscript:
+    superscript:
+    terminate:
+    toggleRuler:
+    underline:
+    unscript:
+
+All outlet connections extracted:
+    editWindow -> NSWindow
+    envelopeView -> EnvelopeView
+    fromField1 -> NSTextField
+    fromField2 -> NSTextField
+    fromField3 -> NSTextField
+    fromField4 -> NSTextField
+    infoPanel -> NSWindow
+    toField1 -> NSTextField
+    toField2 -> NSTextField
+    toField3 -> NSTextField
+    toField4 -> NSTextField
+    toField5 -> NSTextField

@@ -1,0 +1,33 @@
+diff -ruN --label a/Ghidra/Features/Base/src/main/java/ghidra/app/util/bin/format/objectiveC/ObjectiveC1_TypeEncodings.java --label b/Ghidra/Features/Base/src/main/java/ghidra/app/util/bin/format/objectiveC/ObjectiveC1_TypeEncodings.java a/Ghidra/Features/Base/src/main/java/ghidra/app/util/bin/format/objectiveC/ObjectiveC1_TypeEncodings.java b/Ghidra/Features/Base/src/main/java/ghidra/app/util/bin/format/objectiveC/ObjectiveC1_TypeEncodings.java
+--- a/Ghidra/Features/Base/src/main/java/ghidra/app/util/bin/format/objectiveC/ObjectiveC1_TypeEncodings.java
++++ b/Ghidra/Features/Base/src/main/java/ghidra/app/util/bin/format/objectiveC/ObjectiveC1_TypeEncodings.java
+@@ -318,7 +318,8 @@
+ 				return PointerDataType.getPointer(new CharDataType(), pointerSize);
+ 			}
+ 			case _C_ATOM: {
+-				throw new UnsupportedOperationException("atom not supported");
++				buffer.deleteCharAt(0);
++				return new Undefined4DataType();
+ 			}
+ 			case _C_ARY_B: {
+ 				buffer.deleteCharAt(0);//remove _C_ARY_B
+@@ -376,7 +377,8 @@
+ 				return dt;
+ 			}
+ 			case _C_VECTOR: {
+-				throw new UnsupportedOperationException("vector not supported");
++				buffer.deleteCharAt(0);
++				return new Undefined4DataType();
+ 			}
+ 			case _C_CONST: {
+ 				buffer.deleteCharAt(0);
+@@ -417,7 +419,8 @@
+ 				return new TypedefDataType("ATOMIC " + dt.getDisplayName(), dt);
+ 			}
+ 		}
+-		throw new UnsupportedOperationException("Unsupported Objective C type encoding: " + buffer.charAt(0));
++		buffer.deleteCharAt(0);
++		return new Undefined4DataType();
+ 	}
+ 
+ 	private Union parseBitFields(StringBuffer buffer) {
