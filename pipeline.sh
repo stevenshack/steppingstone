@@ -195,11 +195,20 @@ if [ -f "$STUBS" ]; then
     python3 "$REPO/patch_stubs.py" "$STUBS" "$NAME" 2>&1 || echo "  Stub patching failed"
 fi
 
+# Step 8b: Extract app icon (__TEXT/app section -> TIFF)
+echo ""
+echo "=== Step 8b: Extract app icon ==="
+python3 "$REPO/extract_app_icon.py" "$I386" "$OUTDIR"
+
 # Build app bundle
 mkdir -p "$OUTDIR/${NAME}.app/Resources"
 cp "$OUTDIR/Info.plist" "$OUTDIR/${NAME}.app/Resources/" 2>/dev/null || true
 for g in "$OUTDIR"/*.gmodel "$OUTDIR"/*_runtime.gmodel; do
     [ -f "$g" ] && cp "$g" "$OUTDIR/${NAME}.app/Resources/"
+done
+# Copy app icon to app bundle if extracted
+for t in "$OUTDIR"/*.tiff; do
+    [ -f "$t" ] && cp "$t" "$OUTDIR/${NAME}.app/Resources/"
 done
 # Build the binary and copy into app bundle
 (cd "$OUTDIR" && . /usr/share/GNUstep/Makefiles/GNUstep.sh && make -f GNUmakefile) 2>&1 | grep -E "^ |Linking|error" || true
