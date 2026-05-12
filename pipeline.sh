@@ -75,13 +75,30 @@ echo "  Architecture: $ARCH"
 
 # Step 2: Dump ObjC metadata (method names + addresses)
 echo ""
-echo "=== Step 2: ObjC metadata ==="
+echo "=== Step 2a: ObjC metadata ==="
 python3 "$REPO/dump_objc_metadata.py" "$I386" "$OUTDIR"
 
-# Build address list from metadata
-grep -oP '0x[0-9a-fA-F]+\s+\[.*?\]' "$OUTDIR/objc_metadata.txt" | sed 's/\[//;s/\]//' > "$OUTDIR/addr_list.txt"
-METHOD_COUNT=$(wc -l < "$OUTDIR/addr_list.txt")
-echo "  $METHOD_COUNT methods"
+echo ""
+echo "=== Step 2b: C function symbols (LC_SYMTAB) ==="
+python3 "$REPO/dump_c_symbols.py" "$I386" "$OUTDIR"
+
+# Build ObjC address list
+grep -oP '0x[0-9a-fA-F]+\s+\[.*?\]' "$OUTDIR/objc_metadata.txt" | \
+  sed 's/\[//;s/\]//;s/^[[:space:]]*//' > "$OUTDIR/addr_objc.txt"
+OBJC_COUNT=$(wc -l < "$OUTDIR/addr_objc.txt")
+echo "  $OBJC_COUNT ObjC methods"
+
+# Build C symbol address list (skip start/eprol - not real functions)
+grep -oP '0x[0-9a-fA-F]+\s+\S+' "$OUTDIR/c_symbols.txt" | \
+  sed 's/^[[:space:]]*//' | \
+  grep -v '^0x0.* start$' | grep -v '^0x0.* eprol$' > "$OUTDIR/addr_c.txt"
+C_COUNT=$(wc -l < "$OUTDIR/addr_c.txt")
+echo "  $C_COUNT C functions"
+
+# Merge: include only non-duplicate addresses (prefer ObjC names for ObjC methods)
+sort -u "$OUTDIR/addr_objc.txt" "$OUTDIR/addr_c.txt" > "$OUTDIR/addr_list.txt"
+TOTAL_COUNT=$(wc -l < "$OUTDIR/addr_list.txt")
+echo "  $TOTAL_COUNT total ($((TOTAL_COUNT - OBJC_COUNT)) unique C-only)"
 
 # Step 3: Ghidra batch decompilation
 echo ""
@@ -94,9 +111,10 @@ fi
 mkdir -p /tmp/ghidra_projects
 rm -rf /tmp/ghidra_projects/${NAME}_decomp.* 2>/dev/null
 "$GHIDRA/support/analyzeHeadless" /tmp/ghidra_projects "${NAME}_decomp" \
-    -import "$I386" -overwrite -noanalysis \
+    -import "$I386" -overwrite \
     $GHIDRA_PROC \
     -scriptPath "$SCRIPTS" \
+    -preScript DisableObjCAnalyzer.java \
     -postScript DecompileBatch.java "$OUTDIR/addr_list.txt" > "$TMPDIR/raw_decompile.txt" 2>&1 || true
 
 # Step 4: Extract class layout
@@ -113,6 +131,16 @@ python3 "$REPO/build_sources.py" "$TMPDIR/raw_decompile.txt" "$TMPDIR" --app-nam
 echo ""
 echo "=== Step 6: Resolve selectors ==="
 python3 "$REPO/resolve_selectors.py" "$I386" "$TMPDIR/$NAME.m" > "$OUTDIR/$NAME.m" 2>/dev/null
+
+# Step 6b: Resolve class references (PTR_s_* -> [ClassName class] / @selector())
+echo ""
+echo "=== Step 6b: Resolve class references ==="
+python3 "$REPO/resolve_class_refs.py" "$OUTDIR/$NAME.m" "$I386" "$OUTDIR/$NAME.m"
+
+# Step 6c: Fixup decompiled output (ivar names, msgSend translation)
+echo ""
+echo "=== Step 6c: Fixup decompiled output ==="
+python3 "$REPO/fixup_decompile.py" "$OUTDIR/$NAME.m" "$OUTDIR/class_info.json" "$OUTDIR/$NAME.m"
 
 # Step 7: Generate Info.plist
 echo ""

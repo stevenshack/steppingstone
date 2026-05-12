@@ -1,5 +1,17 @@
 # Pipeline Status
 
+## Data Directory
+
+NeXTSTEP application binaries, nib files, and SDK headers are at `~/Code/nextdata/`:
+
+| Directory | Contents |
+|-----------|----------|
+| `LocalApps/` | 42 NeXTSTEP applications (EnvelopeMaker, Create, Diagram, FrameMaker, etc.) |
+| `NextDeveloper/` | SDK: headers, examples, demos, palettes, source |
+| `NextLibrary/` | System: fonts, adaptors, documentation, sounds, colors, keyboards |
+
+Nib files for testing are in `~/Code/nextdata/LocalApps/EnvelopeMaker.app/` (EnvelopeMaker.nib, Info.nib).
+
 ## What Works
 
 ### Pipeline Flow (`./pipeline.sh path/to/binary`)

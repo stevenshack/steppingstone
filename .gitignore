@@ -1,0 +1,19 @@
+# Ghidra installation (large binary)
+ghidra/
+
+# Python cache
+__pycache__/
+*.pyc
+
+# Compiled binaries
+*.bin
+*.o
+nextthunk
+nib_dump
+*.gmodel
+
+# Ghidra project temp files
+/tmp/ghidra_projects/
+
+# Analysis output
+analysis/

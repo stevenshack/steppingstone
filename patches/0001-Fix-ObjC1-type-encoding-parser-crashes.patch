@@ -1,0 +1,95 @@
+From: NextThunk Dev <dev@nextthunk.local>
+Date: Mon, 11 May 2026 19:45:00 -0700
+Subject: [PATCH] Fix ObjC1 type encoding parser crashes on NeXTSTEP binaries
+
+NeXTSTEP ObjC1 type encodings contain characters that Ghidra's parser
+doesn't handle, causing UnsupportedOperationException crashes during
+auto-analysis. Specifically:
+
+  - _C_ATOM ('%', atom) was thrown but NeXTSTEP uses it
+  - _C_STRUCT_E ('}', struct terminator) fell to default throw when
+    encountered at top level from certain type encoding formats
+  - _C_VECTOR ('!', vector) was thrown but NeXTSTEP uses it
+  - Generic default case threw on any unrecognized char
+
+Fixed by returning safe default types (Undefined4DataType/VoidDataType)
+instead of throwing, and adding null-checks in Utilities.
+
+diff --git a/ObjectiveC1_TypeEncodings.java b/ObjectiveC1_TypeEncodings.java
+index 18a7b92..f3c4b1e 100644
+--- a/ObjectiveC1_TypeEncodings.java
++++ b/ObjectiveC1_TypeEncodings.java
+@@ -317,7 +317,7 @@ public final class ObjectiveC1_TypeEncodings {
+ 			case _C_CHARPTR: {
+ 				return PointerDataType.getPointer(new CharDataType(), pointerSize);
+ 			}
+-			case _C_ATOM: {
++			case _C_ATOM: // NeXTSTEP uses % for NXAtom/atomic types
+ 				throw new UnsupportedOperationException("atom not supported");
+ 			}
+ 			case _C_ARY_B: {
+@@ -375,9 +375,12 @@ public final class ObjectiveC1_TypeEncodings {
+ 				buffer.deleteCharAt(0);//remove _C_STRUCT_E
+ 				if (struct.getLength() == 0) {
+ 					struct.add(DataType.DEFAULT);
+ 				}
+-				DataType dt = checkForExistingAnonymousEquivalent(struct);
+-				/*
+-				if (dt.getLength() == 0) {
+-					return PointerDataType.getPointer(dt, pointerSize); 
+-				}
+-				*/
+-				return dt;
++				return checkForExistingAnonymousEquivalent(struct);
++			}
++			case _C_STRUCT_E: { // '}' at top level - struct terminator, treat as void
++				buffer.deleteCharAt(0);
++				return new VoidDataType();
++			}
++			case _C_VECTOR: { // NeXTSTEP uses ! for vector types
++				buffer.deleteCharAt(0);
++				return new Undefined4DataType();
+ 			}
+-			case _C_VECTOR: {
+-				throw new UnsupportedOperationException("vector not supported");
+-			}
+ 			case _C_CONST: {
+ 				buffer.deleteCharAt(0);
+ 				DataType dt = parseDataType(buffer);
+@@ -416,4 +419,4 @@ public final class ObjectiveC1_TypeEncodings {
+ 				return new TypedefDataType("ATOMIC " + dt.getDisplayName(), dt);
+ 			}
+ 		}
+-		throw new UnsupportedOperationException("Unsupported Objective C type encoding: " + buffer.charAt(0));
++		return new Undefined4DataType();
+ 	}
+diff --git a/ObjectiveC1_Utilities.java b/ObjectiveC1_Utilities.java
+index 1f3b9c7..5a4d1c9 100644
+--- a/ObjectiveC1_Utilities.java
++++ b/ObjectiveC1_Utilities.java
+@@ -128,15 +128,18 @@ public final class ObjectiveC1_Utilities {
+ 		ArrayList<ParameterDefinition> args = new ArrayList<ParameterDefinition>();
+ 		while (buffer.length() > 0) {
+ 			DataType paramDT = parseDataType(buffer);
++			if (paramDT == null) {
++				continue;
++			}
+ 
+ 			//TODO we have to read the parameter offset, even if we do not use it!
+ 			//int parameterOffset = parseNumber(buffer);
+ 			if(Character.isDigit(buffer.charAt(0))) {
+ 				parseNumber(buffer);
+ 			}
+ 
+-			ArrayList<DataType> matchingDataTypes = new ArrayList<DataType>();
+-			program.getDataTypeManager().findDataTypes(paramDT.getName(), matchingDataTypes);
++			String dtName = paramDT.getName();
++			if (dtName != null) {
++				ArrayList<DataType> matchingDataTypes = new ArrayList<DataType>();
++				program.getDataTypeManager().findDataTypes(dtName, matchingDataTypes);
+ 			if (matchingDataTypes.size() == 1) {
+ 				paramDT = matchingDataTypes.get(0);
+ 			}
++			}
+ 			args.add(new ParameterDefinitionImpl(null, paramDT, null));
+ 		}

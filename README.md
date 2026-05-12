@@ -134,8 +134,18 @@ Even with full Ghidra analysis, the decompiler produces empty bodies for most fu
 ### Prerequisites
 
 - JDK 25 installed (`apt install openjdk-25-jdk-headless`)
-- Ghidra 12.0.4 extracted at `/home/sshack/Code/nextthunk/ghidra/`
+- Ghidra 12.0.4 extracted at `<repo_root>/ghidra/` (gitignored)
 - `JAVA_HOME` set in the scripts (currently points to `/usr/lib/jvm/java-25-openjdk-amd64`)
+
+### Program workspace structure
+
+Each program being ported has its own directory under `programs/<AppName>/`:
+
+```
+programs/EnvelopeMaker/
+├── EnvelopeMaker          # Original NeXTSTEP m68k binary
+├── analysis/              # Pipeline output (decompiled source, class layouts, stubs)
+└── ported/                # Ported GNUstep application
 
 ### Usage
 
@@ -172,6 +182,18 @@ JAVA_HOME=/usr/lib/jvm/java-25-openjdk-amd64 \
 | Methods implemented in binary | 1,185 (all in __TEXT range) |
 
 ---
+
+## 6. Data Directory
+
+NeXTSTEP binaries, nibs, and SDK headers are at `~/Code/nextdata/`:
+
+| Directory | Contents |
+|-----------|----------|
+| `LocalApps/` | 42 NeXTSTEP applications (EnvelopeMaker.app, Create.app, etc.) |
+| `NextDeveloper/` | Developer SDK: 2.0 headers, example code, demos |
+| `NextLibrary/` | System library: fonts, documentation, sounds, colors |
+
+The test nib files (EnvelopeMaker.nib, Info.nib) are in `~/Code/nextdata/LocalApps/EnvelopeMaker.app/`.
 
 ## 5. Next steps for future work
 
