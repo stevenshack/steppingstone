@@ -10,74 +10,88 @@ NeXTSTEP application binaries, nib files, and SDK headers are at `~/Code/nextdat
 | `NextDeveloper/` | SDK: headers, examples, demos, palettes, source |
 | `NextLibrary/` | System: fonts, adaptors, documentation, sounds, colors, keyboards |
 
-Nib files for testing are in `~/Code/nextdata/LocalApps/EnvelopeMaker.app/` (EnvelopeMaker.nib, Info.nib).
+Test nib files are in `~/Code/nextdata/LocalApps/EnvelopeMaker.app/` (EnvelopeMaker.nib, Info.nib).
 
 ## What Works
 
+### Ghidra Integration
+- Ghidra 12.0.4 installed at `<repo_root>/ghidra/` (gitignored)
+- ObjC1 analyzer crash fixed: `ObjectiveC1_TypeEncodings.java` patched to return `Undefined4DataType` instead of throwing on `%`, `!`, `}`, and unknown type encoding chars
+- `DisableObjCAnalyzer.java` pre-script available as fallback
+- Full Ghidra auto-analysis enabled (removed `-noanalysis`)
+
 ### Pipeline Flow (`./pipeline.sh path/to/binary`)
+
 1. **Architecture detection** — auto-detects i386 LE vs m68k BE Mach-O
 2. **ObjC metadata dump** — method names + IMP addresses from `__OBJC` segment
-3. **Ghidra batch decompilation** — decompiles all methods via headless Ghidra
-4. **Class layout extraction** — class hierarchy, ivar names/types/offsets from `__class`
-5. **Source generation** — ObjC `.m`/`.h` with class routing, ivar names, selector resolution
-6. **Stubs generation** — extern symbols, `objc_msgSend` bridge (`__builtin_apply`), `main()`, menu bar
-7. **Nib → gmodel conversion** — two types:
-   - **Preservation gmodel** (`*_nib.gmodel`): raw nib bytes + extracted metadata strings (round-trippable)
-   - **Runtime gmodel** (`AppName.gmodel`): UI config dict (window size, field names/labels/positions)
-8. **App bundle creation** — `.app` directory with binary, Info.plist, gmodels
+3. **C symbol extraction** — `_main`, `start`, and other C functions from `LC_SYMTAB`
+4. **Ghidra batch decompilation** — decompiles ObjC methods + C functions via headless Ghidra with ObjC1 analyzer disabled
+5. **Class layout extraction** — class hierarchy, ivar names/types/offsets from `__class`
+6. **Source generation** — ObjC `.m`/`.h` with class routing
+7. **Selector resolution** — `PTR_s_*` -> `@selector()`
+8. **Class reference resolution** — `PTR_s_ClassName` -> `[ClassName class]` via `__cls_refs` and `__message_refs`
+9. **Decompilation fixup**:
+   - Method signatures: `ID Class::method_()` → `- (id)methodName:(id)sender`
+   - Ivar names: `*(id *)(self + 0xNN)` → `self->ivarName`
+   - msgSend calls: `(*(code *)&SUB_XXX)(r, @selector(m:), a)` → `[r m:a]`
+   - C functions: extracted from `@implementation` blocks, `_main` → `int main()`
+10. **App icon extraction** — `__TEXT/app` section (TIFF) extracted to analysis/ and app bundle
+11. **Nib → gmodel conversion** — preservation and runtime gmodels
+12. **App bundle creation** — `.app` directory with binary, Info.plist, gmodels, icon
 
-### Binary Decompilation
-- 16/16 methods decompiled and class-routed (EnvelopeApp, EnvelopeView)
-- Ivar offsets replaced with named access (`self->fromField1`)
-- `objc_msgSend` forwards via `objc_msg_lookup` + `__builtin_apply`
-- Zero compiler errors (with `-fpermissive`)
+### Binary Decompilation (EnvelopeMaker)
+- 17 functions decompiled (16 ObjC methods + `_main`)
+- All ivar offsets replaced with named access (21 ivars across 2 classes)
+- All `objc_msgSend` calls translated to `[receiver message]` syntax
+- All `extern Class PTR_s_*` references resolved (1 class + 25 selectors)
+- `_main` emitted as standalone `int main()` with `NSApplicationMain`
+- Zero compiler errors in generated stubs
+
+### Nib Struct Tests
+- 17 Python tests covering nib file parsing, selector/outlet extraction, type encoding mapping
+- ObjC archive round-trip test (creates NSWindow/NSTextField/NSButton/NSMenu, archives via NSArchiver, loads back)
 
 ### Nib Round-Trip
-- `nib → preservation gmodel → nib → preservation gmodel` = **bit-identical**
-- This works because `nib2gmodel.m` stores the raw nib bytes as `NSData` without ANY parsing.
-- `gmodel2nib.m` writes the raw bytes back.
-- **No typedstream understanding is involved in the round trip.**
+- `nib → preservation gmodel → nib → preservation gmodel` = bit-identical
+- Raw nib bytes stored as `NSData` without any typedstream parsing
 
-## Current Nib Parsing (`extract_nib.py`)
+## Not Working / Remaining Gaps
 
-### What the typedstream parser DOES extract correctly
-All **typed atoms** from the outer and nested ([908c]) typedstreams:
-- **Class definitions**: `HashTable`, `Object`, `NibData`, `Storage`, `File's Owner`, `CustomObject`, `EnvelopeApp`, `MainMenu`, `MenuTemplate`, `WindowTemplate`, `Matrix`, `Control`, `View`, `Responder`, `Button`, `Text/TextField`, `MenuCell`, `ButtonCell`, `ActionCell`, `Cell`, etc.
-- **Selectors**: `appDidInit:`, `printEnvelope:`, `setAddrFields:`, `showInfoPanel:`, `cut:`, `copy:`, `paste:`, `selectAll:`, etc.
-- **Object references** and **nesting structure** (504 atoms for EnvelopeMaker.nib, 304 for Info.nib)
+### Decompilation Quality
+- **Nested objc_msgSend** — `[[self window] display]` produces garbled output from the regex-based translator
+- **Decompiler artifacts** — `halt_baddata()`, `CONCAT31`, `int3`, `CONCAT44` macros from Ghidra's m68k decompilation
+- **SUB_ address resolution** — functions like `SUB_0500301a` (string copy) and `func_0x050024b0` can't be named without NeXTSTEP shared library symbol tables from `/lib`
+- **All params typed as `(id)`** — ivar type encoding strings are not used to generate proper ObjC type signatures yet
+- **Ghidra C output, not true ObjC** — the decompiler emits C; the fixup pipeline does regex-based transforms, not AST-level understanding
 
-### What the parser DOES NOT extract
-- **Window frames** (position, size, title) — stored as raw C struct shorts inside `[908c]` byte array, not as typedstream floats. On m68k NeXTSTEP, `NXRect` coordinates are stored as **short integers** (16-bit big-endian), not IEEE 754 floats. The typedstream parser only sees these as opaque raw data.
-- **Text field frames** — same issue, stored as short ints inside the raw struct data.
-- **Menu item hierarchy** — `MenuTemplate` class data is in the raw structs, not decoded.
-- **Outlet connections** — `NSNibOutletConnector` objects exist in the typedstream but their target/source references aren't resolved into a usable form.
-- **Window title** ("Envelope Editor") — stored inside the WindowTemplate struct data.
-- **Button labels, default values, colors, fonts** — all inside raw struct data.
+### Nib Struct Parsing
+- **WindowTemplate struct** — frame coordinates, title, styleMask not decoded from nib byte arrays
+- **MenuTemplate struct** — menu items with titles, key equivalents, actions not extracted
+- **Control/Button/TextField frames** — positions and sizes not parsed from nib struct data
+- **Outlet/action connections** — not resolved from nib data into usable form
+- **Runtime gmodel** — still uses guessed positions instead of actual nib layout data
 
-### Why the Runtime UI is Wrong
-`build_runtime_gmodel.m` only reads **extracted strings** (field names/labels) from the preservation gmodel's metadata. It does NOT use the typedstream parser. It makes up generic positions:
-```objc
-float y = windowH - 40;
-for (i = 0; i < [fieldSpecs count]; i++) {
-    // Uses guessed y position, not nib frame data
-}
-```
+### Pipeline Gaps
+- **Categories** — `__cat_cls_meth`/`__cat_inst_meth` sections not parsed (low impact, most apps don't use them)
+- **Protocols** — `__protocol` section not parsed
+- **`LC_LOADFVMLIB`** — loaded library paths known but no symbol resolution without the actual `.shlib` files
+- **Ivar type strings** — stored in `__inst_var_def`/`__meth_var_types` but only offsets are used, not types
 
-The runtime gmodel has **no knowledge** of:
-- The window's actual size (320×240 in nib, guessed at 400×something)
-- The window's title ("Envelope Editor" in nib, guessed as "Envelopemaker")
-- Text field positions (nib-specific shorts, guessed as evenly spaced)
-- The menu structure (replaced with hardcoded App/Edit/Window menus)
-- The Print button and its connection to `printEnvelope:`
-- The Show Info Panel button/menu item
+## What's Needed Next
 
-## What's Needed for Full Nib Conversion
-Full nib conversion requires:
-1. **Parse the WindowTemplate struct** from the `[908c]` byte array — extract frame (4 shorts: x,y,w,h), title (C string), styleMask
-2. **Parse the MenuTemplate struct** — menu items with their titles, key equivalents, actions, submenus
-3. **Parse Text/Button/Control structs** — frames, string values, action selectors
-4. **Resolve outlet/target-action connections** — link `fromField1` outlet to its NSTextField, link `printEnvelope:` action to the Button
-5. **Create real ObjC objects** (NSWindow, NSTextField, NSButton, NSMenu, NSMenuItem) with the correct frames and properties
-6. **Archive via NSArchiver** into the runtime gmodel
+### Short Term
+- Parse nib struct data directly (WindowTemplate frame/title, MenuTemplate items, control frames) from `[Nc]` byte arrays using known struct layouts
+- Resolve outlet/action connections by parsing `NSNibOutletConnector` objects in the typedstream
+- Add NeXTSTEP shared library symbol resolution when `/lib` files are available
+- Clean up Ghidra decompiler artifacts (`halt_baddata`, CONCAT macros) in the fixup pass
 
-The struct layouts for NeXTSTEP classes are documented in the OPENSTEP SDK headers but are class-specific. Each class has a known struct layout for its "nib template" data — WindowTemplate is ~908 bytes, MenuTemplate is ~2517 bytes, etc.
+### Medium Term
+- Generate proper ObjC type signatures from ivar type encoding strings (not just `(id)`)
+- Handle nested `objc_msgSend` in the translator (parenthesized receiver expressions)
+- Support multiple architecture slices in a single pipeline run
+- Extract `__protocol` and category metadata
+
+### Long Term
+- Full typedstream-based nib conversion to GNUstep gmodel with correct frames and connections
+- Display PostScript → GNUstep drawing backend
+- `nextthunk` m68k emulator integration for dynamic analysis
