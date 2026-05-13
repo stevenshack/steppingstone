@@ -51,10 +51,6 @@ Test nib files are in `~/Code/nextdata/LocalApps/EnvelopeMaker.app/` (EnvelopeMa
 - 17 Python tests covering nib file parsing, selector/outlet extraction, type encoding mapping
 - ObjC archive round-trip test (creates NSWindow/NSTextField/NSButton/NSMenu, archives via NSArchiver, loads back)
 
-### Nib Round-Trip
-- `nib → preservation gmodel → nib → preservation gmodel` = bit-identical
-- Raw nib bytes stored as `NSData` without any typedstream parsing
-
 ## Not Working / Remaining Gaps
 
 ### Decompilation Quality
@@ -65,6 +61,7 @@ Test nib files are in `~/Code/nextdata/LocalApps/EnvelopeMaker.app/` (EnvelopeMa
 - **Ghidra C output, not true ObjC** — the decompiler emits C; the fixup pipeline does regex-based transforms, not AST-level understanding
 
 ### Nib Struct Parsing
+- **Nib roundtrip** — raw nib bytes are copied as `NSData`, not actually parsed and reconstructed; there is no true round-trip
 - **WindowTemplate struct** — frame coordinates, title, styleMask not decoded from nib byte arrays
 - **MenuTemplate struct** — menu items with titles, key equivalents, actions not extracted
 - **Control/Button/TextField frames** — positions and sizes not parsed from nib struct data

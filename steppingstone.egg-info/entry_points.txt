@@ -1,0 +1,3 @@
+[console_scripts]
+app2source = app2source.__main__:main
+nextstep2gnustep = nextstep2gnustep.__main__:main

@@ -1,0 +1,6 @@
+Metadata-Version: 2.4
+Name: steppingstone
+Version: 0.1.0
+Summary: Toolchain for migrating NEXTSTEP/OPENSTEP Mach-O applications to GNUstep on Linux
+License: MIT
+Requires-Python: >=3.10
